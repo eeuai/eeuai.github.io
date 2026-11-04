@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>게임 창고</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a shelf of game cartridges. Games live in this GitHub repository:
+   games.json holds the list, games/<id>.html holds each game. Uploads commit through the GitHub API. */
+:root {
+  --bg: #e8edee;
+  --surface: #f7f9f9;
+  --ink: #10181c;
+  --muted: #58656b;
+  --line: #c9d3d5;
+  --accent: #0a8f67;
+  --accent-ink: #ffffff;
+  --warm: #f0c13a;
+  --danger: #c43d2f;
+  --f-display: 'Black Han Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --f-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1517; --surface: #152023; --ink: #e4eeeb; --muted: #8fa09b; --line: #26363a;
+    --accent: #3fd9a0; --accent-ink: #04231a; --warm: #e6b92e; --danger: #ff7a6b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1517; --surface: #152023; --ink: #e4eeeb; --muted: #8fa09b; --line: #26363a;
+  --accent: #3fd9a0; --accent-ink: #04231a; --warm: #e6b92e; --danger: #ff7a6b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+.mono { font-family: var(--f-mono); }
+button, input, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 20px; border-bottom: 2px solid var(--ink); }
+.brand { min-width: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+h1 { margin: 2px 0 0; font-family: var(--f-display); font-weight: 400; font-size: clamp(36px, 8vw, 56px); line-height: 1.05; letter-spacing: -.01em; text-wrap: balance; }
+.top-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.count { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 18px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--surface); cursor: pointer; font-weight: 600; text-decoration: none; color: var(--ink); transition: transform .12s ease, background .12s ease; }
+.btn:hover { background: var(--bg); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn.small { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+.btn.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.status { margin: 14px 0 0; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-right: 6px; vertical-align: middle; }
+.status .dot.on { background: var(--accent); }
+
+/* view tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.tabs button { min-height: 38px; padding: 6px 16px; border: 1.5px solid var(--ink); border-radius: 999px; background: transparent; cursor: pointer; font-weight: 600; }
+.tabs button:hover { background: var(--surface); }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.tabs .n { margin-left: 6px; font-family: var(--f-mono); font-size: 12px; opacity: .75; }
+
+/* shelf */
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 22px; margin-top: 26px; }
+.cart { --c: var(--warm); display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: 1.5px solid var(--ink); border-radius: 6px 6px 16px 16px; overflow: hidden; }
+.cart-label { position: relative; height: 112px; background: var(--c); border-bottom: 1.5px solid var(--ink); overflow: hidden; color: #10181c; }
+.cart-glyph { position: absolute; left: 14px; bottom: -22px; font-family: var(--f-display); font-size: 108px; line-height: 1; }
+.cart-tag { position: absolute; top: 10px; right: 12px; font-size: 11px; letter-spacing: .12em; padding: 2px 7px; border: 1.5px solid #10181c; border-radius: 3px; }
+.cart-body { display: flex; flex-direction: column; flex: 1; gap: 8px; padding: 14px 16px 12px; min-width: 0; }
+.cart h3 { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+.cart p { margin: 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.meta { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.cart-actions { display: flex; gap: 8px; padding: 0 16px 14px; }
+.cart-actions .btn { flex: 1; }
+.cart-actions .btn.danger { flex: 0 0 auto; }
+.cart-grip { height: 12px; border-top: 1.5px solid var(--ink); background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 7px); opacity: .85; }
+
+/* empty */
+.empty { margin-top: 26px; padding: 36px 24px; border: 2px dashed var(--line); border-radius: 10px; display: grid; gap: 12px; justify-items: start; }
+.empty h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; }
+.empty p { margin: 0; max-width: 56ch; color: var(--muted); }
+.empty .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+
+/* panels */
+.sheet { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; background: rgba(8, 14, 16, .6); padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.panel { width: 100%; max-width: 540px; margin: 4vh 0; background: var(--surface); border: 1.5px solid var(--ink); border-radius: 10px; padding: 22px; display: grid; gap: 16px; }
+.panel h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; }
+.panel p { margin: 0; font-size: 14px; color: var(--muted); }
+.steps { margin: 0; padding-left: 20px; font-size: 14px; color: var(--muted); display: grid; gap: 4px; }
+.steps b { color: var(--ink); font-weight: 600; }
+.field { display: grid; gap: 6px; }
+.field label, .field .lab { font-size: 13px; font-weight: 600; }
+.field .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+input[type="text"], input[type="url"], input[type="password"], textarea { width: 100%; padding: 9px 11px; background: var(--bg); border: 1.5px solid var(--line); border-radius: 6px; }
+input:focus, textarea:focus { border-color: var(--accent); outline: none; }
+textarea { min-height: 120px; resize: vertical; font-family: var(--f-mono); font-size: 12.5px; }
+input[type="file"] { font-size: 13px; max-width: 100%; }
+.seg { display: flex; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.seg button { flex: 1; min-height: 38px; border: 0; background: transparent; cursor: pointer; font-weight: 600; }
+.seg button + button { border-left: 1.5px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.form-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.form-actions .spacer { flex: 1; }
+.err { min-height: 1.4em; margin: 0; font-size: 13px; color: var(--danger); }
+.ok { color: var(--accent); }
+
+/* player */
+.player { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.player-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1.5px solid var(--ink); }
+.player-title { display: flex; flex-direction: column; min-width: 0; }
+.player-title strong { font-size: 16px; overflow-wrap: anywhere; }
+.player-title span { font-size: 12px; color: var(--muted); }
+.player-actions { display: flex; gap: 8px; }
+.stage { position: relative; flex: 1; min-height: 0; }
+.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.stage-msg { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; background: var(--bg); }
+.stage-msg p { margin: 0; max-width: 44ch; color: var(--muted); }
+
+.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40; max-width: calc(100% - 32px); padding: 10px 16px; background: var(--ink); color: var(--bg); border-radius: 6px; font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Game Shelf · 둘이서 만든 게임 모음</div>
+      <h1>게임 창고</h1>
+    </div>
+    <div class="top-right">
+      <span class="count" id="count"></span>
+      <button class="btn small" id="open-settings" type="button">GitHub 연결</button>
+      <button class="btn primary" id="open-add" type="button">게임 올리기</button>
+    </div>
+  </header>
+  <p class="status" id="status"></p>
+  <div class="tabs" id="tabs" role="group" aria-label="게임 보기" hidden>
+    <button type="button" id="t-all" aria-pressed="true">전체<span class="n" id="n-all"></span></button>
+    <button type="button" id="t-mine" aria-pressed="false">내가 올린 게임<span class="n" id="n-mine"></span></button>
+  </div>
+  <main id="list" aria-live="polite"></main>
+</div>
+
+<!-- GitHub connection -->
+<div class="sheet" id="set-sheet" hidden>
+  <form class="panel" id="set-form" novalidate>
+    <h2>GitHub 연결</h2>
+    <p id="set-why">게임을 올리고 지우려면 이 사이트의 GitHub 저장소에 쓸 수 있는 토큰이 필요해요. 구경과 플레이는 연결 없이도 돼요.</p>
+    <ol class="steps">
+      <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub 토큰 만들기</a> 페이지를 열어요.</li>
+      <li><b>Repository access</b>에서 <b>Only select repositories</b>를 고르고 이 사이트 저장소만 골라요.</li>
+      <li><b>Permissions → Contents</b>를 <b>Read and write</b>로 바꾸고 토큰을 만들어요.</li>
+      <li>만든 토큰을 아래에 붙여넣어요. 친구도 저장소 협업자(Collaborator)로 초대받은 뒤 자기 토큰을 만들면 돼요.</li>
+    </ol>
+    <div class="field">
+      <label for="s-repo">저장소 <span class="hint">(owner/repo 형태)</span></label>
+      <input type="text" id="s-repo" autocomplete="off" spellcheck="false" placeholder="예: myname/game-shelf">
+    </div>
+    <div class="field">
+      <label for="s-token">토큰 <span class="hint">(이 브라우저에만 저장돼요. 공용 컴퓨터에서는 쓰지 마세요)</span></label>
+      <input type="password" id="s-token" autocomplete="off" spellcheck="false" placeholder="github_pat_...">
+    </div>
+    <p class="err" id="s-err" role="alert"></p>
+    <div class="form-actions">
+      <button type="button" class="btn danger" id="s-logout">토큰 지우기</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="s-cancel">닫기</button>
+      <button type="submit" class="btn primary" id="s-save">연결</button>
+    </div>
+  </form>
+</div>
+
+<!-- Upload -->
+<div class="sheet" id="add-sheet" hidden>
+  <form class="panel" id="add-form" novalidate>
+    <h2>게임 올리기</h2>
+    <div class="field">
+      <label for="f-title">게임 이름</label>
+      <input type="text" id="f-title" maxlength="40" autocomplete="off" placeholder="예: 점 잡기">
+    </div>
+    <div class="field">
+      <label for="f-desc">한 줄 소개 <span class="hint">(선택)</span></label>
+      <input type="text" id="f-desc" maxlength="100" autocomplete="off" placeholder="예: 15초 동안 점을 최대한 많이 누르기">
+    </div>
+    <div class="field">
+      <label for="f-by">올린 사람 이름 <span class="hint">(선택, 누구에게나 보여요)</span></label>
+      <input type="text" id="f-by" maxlength="20" autocomplete="off" placeholder="예: 민수">
+    </div>
+    <div class="field">
+      <span class="lab">올리는 방식</span>
+      <div class="seg" role="group" aria-label="올리는 방식">
+        <button type="button" id="m-html" aria-pressed="true">HTML 게임</button>
+        <button type="button" id="m-link" aria-pressed="false">링크</button>
+      </div>
+    </div>
+    <div id="box-html" class="field">
+      <label for="f-file">HTML 파일 <span class="hint">(파일 하나로 된 게임, 5MB 이하)</span></label>
+      <input type="file" id="f-file" accept=".html,.htm,text/html">
+      <label for="f-code" class="hint" style="margin-top:6px">파일 대신 코드를 붙여넣어도 돼요</label>
+      <textarea id="f-code" spellcheck="false" placeholder="&lt;!doctype html&gt; ..."></textarea>
+    </div>
+    <div id="box-link" class="field" hidden>
+      <label for="f-url">게임 주소</label>
+      <input type="url" id="f-url" autocomplete="off" placeholder="https://...">
+      <span class="hint">다른 사이트의 게임은 새 탭으로 열려요.</span>
+    </div>
+    <p class="err" id="f-err" role="alert"></p>
+    <div class="form-actions">
+      <button type="button" class="btn" id="add-cancel">취소</button>
+      <button type="submit" class="btn primary" id="add-submit">올리기</button>
+    </div>
+  </form>
+</div>
+
+<!-- Player -->
+<div class="player" id="player" hidden>
+  <div class="player-bar">
+    <div class="player-title"><strong id="p-title"></strong><span class="mono" id="p-by"></span></div>
+    <div class="player-actions">
+      <button class="btn small" id="p-full" type="button">전체 화면</button>
+      <button class="btn small primary" id="p-close" type="button">닫기</button>
+    </div>
+  </div>
+  <div class="stage">
+    <iframe id="p-frame" title="게임 화면" sandbox="allow-scripts allow-pointer-lock allow-forms" allow="fullscreen"></iframe>
+    <div class="stage-msg" id="p-msg">
+      <p id="p-msg-text">불러오는 중...</p>
+      <a class="btn primary" id="p-link" target="_blank" rel="noopener noreferrer" hidden>새 탭에서 열기</a>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- settings ---------- */
+  // Fill this in if the site runs on your own domain, e.g. 'myname/game-shelf'.
+  // On username.github.io it is detected automatically.
+  var DEFAULT_REPO = '';
+  var LIST_PATH = 'games.json';
+  var GAME_DIR = 'games/';
+  var MAX_GAME_BYTES = 5000000;
+  var API = 'https://api.github.com';
+
+  var COLORS = ['#f0c13a', '#3fb68b', '#e8734a', '#4a9be8', '#d96aa7', '#9a85e0'];
+  var LS_TOKEN = 'gameShelf.token', LS_REPO = 'gameShelf.repo';
+
+  var $ = function (s) { return document.querySelector(s); };
+  var state = {
+    games: [],
+    loaded: false,
+    loadError: '',
+    repo: '',
+    token: '',
+    login: '',
+    canWrite: false,
+    branch: '',
+    view: 'all',
+    mode: 'html'
+  };
+  var toastTimer = null;
+
+  function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
+
+  function detectRepo() {
+    var m = location.hostname.match(/^([a-z0-9-]+)\.github\.io$/i);
+    if (!m) return '';
+    var owner = m[1];
+    var seg = location.pathname.split('/').filter(Boolean)[0];
+    if (seg && !/\.html?$/i.test(seg)) return owner + '/' + seg;
+    return owner + '/' + owner + '.github.io';
+  }
+  function validRepo(r) { return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r || ''); }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function hashIdx(id) {
+    id = String(id || '');
+    var h = 0;
+    for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h % COLORS.length;
+  }
+  function newId() {
+    var a = new Uint8Array(8);
+    try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < 8; i++) a[i] = Math.floor(Math.random() * 256); }
+    return Array.prototype.map.call(a, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  function toast(msg) {
+    var t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 3600);
+  }
+  function fmtDate(ms) {
+    if (!ms) return '';
+    try { return new Date(ms).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }); } catch (e) { return ''; }
+  }
+  function byteLen(s) { return new TextEncoder().encode(s).length; }
+  function textToB64(text) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { var s = String(r.result); resolve(s.slice(s.indexOf(',') + 1)); };
+      r.onerror = function () { reject(r.error); };
+      r.readAsDataURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    });
+  }
+  function b64ToText(b64) {
+    var bin = atob(String(b64 || '').replace(/\s/g, ''));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function encPath(p) { return p.split('/').map(encodeURIComponent).join('/'); }
+
+  /* ---------- GitHub API ---------- */
+  function apiErr(status, message) { var e = new Error(message || ('GitHub 오류 ' + status)); e.status = status; return e; }
+
+  async function gh(path, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': opts.accept || 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    var res;
+    try {
+      res = await fetch(API + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, cache: 'no-store' });
+    } catch (e) {
+      throw apiErr(0, 'GitHub에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.');
+    }
+    if (!res.ok) {
+      var msg = '';
+      try { msg = (await res.json()).message || ''; } catch (e) {}
+      throw apiErr(res.status, msg);
+    }
+    if (opts.raw) return res.text();
+    if (res.status === 204) return null;
+    return res.json();
+  }
+  function repoPath() { return '/repos/' + state.repo; }
+  function refQ() { return state.branch ? '?ref=' + encodeURIComponent(state.branch) : ''; }
+
+  async function readListFromApi() {
+    try {
+      var f = await gh(repoPath() + '/contents/' + encPath(LIST_PATH) + refQ());
+      var list = JSON.parse(b64ToText(f.content));
+      return { list: Array.isArray(list) ? list : [], sha: f.sha };
+    } catch (e) {
+      if (e.status === 404) return { list: [], sha: null };
+      throw e;
+    }
+  }
+  async function readListFromSite() {
+    var res = await fetch(LIST_PATH + '?v=' + Date.now(), { cache: 'no-store' });
+    if (res.status === 404) return [];
+    if (!res.ok) throw apiErr(res.status);
+    var list = await res.json();
+    return Array.isArray(list) ? list : [];
+  }
+
+  async function putFile(path, b64, message, sha) {
+    var body = { message: message, content: b64 };
+    if (sha) body.sha = sha;
+    if (state.branch) body.branch = state.branch;
+    return gh(repoPath() + '/contents/' + encPath(path), { method: 'PUT', body: body });
+  }
+  async function deleteFile(path, message) {
+    var meta;
+    try { meta = await gh(repoPath() + '/contents/' + encPath(path) + refQ()); }
+    catch (e) { if (e.status === 404) return; throw e; }
+    var body = { message: message, sha: meta.sha };
+    if (state.branch) body.branch = state.branch;
+    await gh(repoPath() + '/contents/' + encPath(path), { method: 'DELETE', body: body });
+  }
+
+  // Read the latest games.json, apply change(), write it back. Retries once if a friend saved at the same time.
+  async function changeList(change, message) {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      var cur = await readListFromApi();
+      var next = change(cur.list.slice());
+      var b64 = await textToB64(JSON.stringify(next, null, 2) + '\n');
+      try {
+        await putFile(LIST_PATH, b64, message, cur.sha);
+        state.games = next;
+        return next;
+      } catch (e) {
+        if ((e.status === 409 || e.status === 422) && attempt < 2) continue;
+        throw e;
+      }
+    }
+  }
+
+  function friendlyError(e) {
+    var s = e && e.status;
+    if (s === 401) return '토큰이 맞지 않거나 만료됐어요. GitHub 연결에서 새 토큰을 넣어 주세요.';
+    if (s === 403) return '이 토큰에는 저장소에 쓸 권한이 없어요. Contents 권한을 Read and write로 만들었는지 확인해 주세요.';
+    if (s === 404) return '저장소를 찾지 못했어요. 저장소 이름과 토큰의 저장소 선택을 확인해 주세요.';
+    if (s === 409 || s === 422) return '친구가 동시에 저장했어요. 잠시 뒤에 다시 시도해 주세요.';
+    if (s === 413) return '파일이 너무 커서 GitHub가 받지 않았어요. 더 작은 파일로 올려 주세요.';
+    return (e && e.message) || '저장하지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
+  }
+
+  /* ---------- connection ---------- */
+  async function connect() {
+    state.login = '';
+    state.canWrite = false;
+    state.branch = '';
+    if (!state.repo) return;
+    try {
+      var info = await gh(repoPath());
+      state.branch = info.default_branch || '';
+      if (state.token) {
+        state.canWrite = !!(info.permissions && (info.permissions.push || info.permissions.admin));
+        var me = await gh('/user');
+        state.login = me.login || '';
+      }
+    } catch (e) {
+      if (state.token) throw e;
+    }
+  }
+
+  async function loadGames() {
+    state.loadError = '';
+    try {
+      if (state.token && state.repo) {
+        state.games = (await readListFromApi()).list;
+      } else {
+        try { state.games = await readListFromSite(); }
+        catch (e) {
+          if (!state.repo) throw e;
+          state.games = (await readListFromApi()).list;
+        }
+      }
+    } catch (e) {
+      state.loadError = '게임 목록을 불러오지 못했어요. 잠시 뒤에 새로고침해 주세요.';
+    }
+    state.loaded = true;
+  }
+
+  function renderStatus() {
+    var st = $('#status');
+    st.textContent = '';
+    var a = el('span');
+    var dot = el('span', 'dot' + (state.canWrite ? ' on' : ''));
+    a.append(dot);
+    if (state.canWrite) {
+      a.append(document.createTextNode('@' + state.login + ' 로 연결됨 · 게임을 올리고 지울 수 있어요'));
+    } else if (state.token) {
+      a.append(document.createTextNode('토큰이 연결됐지만 이 저장소에 쓸 수 없어요'));
+    } else {
+      a.append(document.createTextNode('보기 전용 · 게임을 올리려면 GitHub 연결이 필요해요'));
+    }
+    st.append(a);
+    if (state.repo) st.append(el('span', 'mono', state.repo));
+    $('#open-settings').textContent = state.canWrite ? '연결 설정' : 'GitHub 연결';
+    $('#tabs').hidden = !state.login;
+  }
+
+  /* ---------- list ---------- */
+  function render() {
+    renderStatus();
+    var list = $('#list');
+    var sorted = state.games.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    var mine = sorted.filter(function (g) { return state.login && g.by === state.login; });
+    if (state.view === 'mine' && !state.login) state.view = 'all';
+    var shown = state.view === 'mine' ? mine : sorted;
+
+    $('#count').textContent = state.loaded ? (state.view === 'mine' ? '내가 올린 게임 ' : '게임 ') + shown.length + '개' : '';
+    $('#n-all').textContent = String(sorted.length);
+    $('#n-mine').textContent = String(mine.length);
+    $('#t-all').setAttribute('aria-pressed', String(state.view === 'all'));
+    $('#t-mine').setAttribute('aria-pressed', String(state.view === 'mine'));
+    list.textContent = '';
+
+    if (!state.loaded) { list.append(emptyBox('불러오는 중...', '', false)); return; }
+    if (state.loadError) { list.append(emptyBox('게임 목록을 불러오지 못했어요', state.loadError, false)); return; }
+    if (!shown.length) {
+      list.append(emptyBox(
+        state.view === 'mine' ? '아직 올린 게임이 없어요' : '아직 올라온 게임이 없어요',
+        state.canWrite
+          ? '파일 하나로 된 HTML 게임을 올리면 누구나 바로 플레이할 수 있어요.'
+          : '게임을 올리려면 GitHub 연결을 먼저 해 주세요. 올라온 게임은 누구나 플레이할 수 있어요.',
+        true));
+      return;
+    }
+    var shelf = el('div', 'shelf');
+    shown.forEach(function (g) { try { shelf.append(card(g)); } catch (e) {} });
+    list.append(shelf);
+  }
+
+  function emptyBox(title, text, withAction) {
+    var box = el('div', 'empty');
+    box.append(el('h2', null, title));
+    if (text) box.append(el('p', null, text));
+    if (withAction) {
+      var row = el('div', 'row');
+      var b = el('button', 'btn primary', state.canWrite ? '게임 올리기' : 'GitHub 연결');
+      b.type = 'button';
+      b.addEventListener('click', state.canWrite ? openAdd : function () { openSettings(''); });
+      row.append(b);
+      box.append(row);
+    }
+    return box;
+  }
+
+  function whoOf(g) {
+    if (g.byName) return g.byName;
+    if (g.by && g.by === state.login) return '내가 올림';
+    return g.by ? '@' + g.by : '';
+  }
+  function canDelete(g) {
+    if (!state.canWrite) return false;
+    var owner = (state.repo.split('/')[0] || '').toLowerCase();
+    return g.by === state.login || state.login.toLowerCase() === owner;
+  }
+
+  function card(g) {
+    var c = el('article', 'cart');
+    c.style.setProperty('--c', COLORS[hashIdx(g.id)]);
+    var label = el('div', 'cart-label');
+    label.append(el('div', 'cart-glyph', Array.from(g.title || '?')[0] || '?'));
+    label.append(el('span', 'cart-tag mono', g.type === 'link' ? 'LINK' : 'HTML'));
+    c.append(label);
+
+    var body = el('div', 'cart-body');
+    body.append(el('h3', null, g.title || '이름 없는 게임'));
+    if (g.desc) body.append(el('p', null, g.desc));
+    var meta = el('div', 'meta');
+    var who = whoOf(g);
+    if (who) meta.append(el('span', null, who));
+    var d = fmtDate(g.createdAt);
+    if (d) meta.append(el('span', null, d));
+    body.append(meta);
+    c.append(body);
+
+    var actions = el('div', 'cart-actions');
+    var play = el('button', 'btn primary', g.type === 'link' ? '열기' : '플레이');
+    play.type = 'button';
+    play.addEventListener('click', function () { openGame(g, who); });
+    actions.append(play);
+
+    if (canDelete(g)) {
+      var del = el('button', 'btn danger', '삭제');
+      del.type = 'button';
+      var armed = false, t = null;
+      del.addEventListener('click', function () {
+        if (!armed) {
+          armed = true; del.textContent = '정말 삭제';
+          t = setTimeout(function () { armed = false; del.textContent = '삭제'; }, 3000);
+          return;
+        }
+        clearTimeout(t);
+        del.disabled = true; del.textContent = '삭제 중...';
+        removeGame(g).catch(function (e) {
+          toast(friendlyError(e));
+          del.disabled = false; del.textContent = '삭제'; armed = false;
+        });
+      });
+      actions.append(del);
+    }
+    c.append(actions);
+    c.append(el('div', 'cart-grip'));
+    return c;
+  }
+
+  /* ---------- player ---------- */
+  // A fresh, always-visible iframe per game: loading into a hidden iframe can leave a zero-height layout.
+  // The sandbox has no allow-same-origin, so a game can never read this page's saved token.
+  function resetFrame() {
+    var old = $('#p-frame');
+    var f = document.createElement('iframe');
+    f.id = 'p-frame';
+    f.title = '게임 화면';
+    f.setAttribute('sandbox', 'allow-scripts allow-pointer-lock allow-forms');
+    f.setAttribute('allow', 'fullscreen');
+    old.replaceWith(f);
+    return f;
+  }
+  async function fetchGameHtml(g) {
+    if (g.html) return g.html;
+    var path = GAME_DIR + g.id + '.html';
+    try {
+      var res = await fetch(path + '?v=' + (g.createdAt || 0), { cache: 'no-cache' });
+      if (res.ok) return await res.text();
+    } catch (e) {}
+    // Just uploaded and the site has not rebuilt yet: read it straight from the repository.
+    if (state.repo) return gh(repoPath() + '/contents/' + encPath(path) + refQ(), { accept: 'application/vnd.github.raw+json', raw: true });
+    throw apiErr(404);
+  }
+  async function openGame(g, who) {
+    var player = $('#player'), msg = $('#p-msg'), mtext = $('#p-msg-text'), link = $('#p-link');
+    $('#p-title').textContent = g.title || '';
+    $('#p-by').textContent = who || '';
+    player.hidden = false;
+    document.body.style.overflow = 'hidden';
+    var frame = resetFrame();
+    link.hidden = true;
+    msg.hidden = false;
+
+    if (g.type === 'link') {
+      mtext.textContent = '이 게임은 다른 사이트에 있어서 새 탭에서 열려요.';
+      link.href = g.url;
+      link.hidden = false;
+      $('#p-full').hidden = true;
+      return;
+    }
+    $('#p-full').hidden = false;
+    mtext.textContent = '불러오는 중...';
+    var html;
+    try { html = await fetchGameHtml(g); }
+    catch (e) {
+      if (player.hidden) return;
+      mtext.textContent = e && e.status === 403
+        ? 'GitHub 요청 한도에 걸렸어요. 1~2분 뒤에 다시 열어 보세요.'
+        : '게임 파일을 불러오지 못했어요. 방금 올렸다면 1~2분 뒤에 다시 열어 보세요.';
+      return;
+    }
+    if (player.hidden || $('#p-frame') !== frame) return;
+    msg.hidden = true;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { frame.srcdoc = html; }); });
+  }
+  function closeGame() {
+    $('#player').hidden = true;
+    resetFrame();
+    document.body.style.overflow = '';
+  }
+
+  /* ---------- upload / delete ---------- */
+  function setMode(m) {
+    state.mode = m;
+    $('#m-html').setAttribute('aria-pressed', String(m === 'html'));
+    $('#m-link').setAttribute('aria-pressed', String(m === 'link'));
+    $('#box-html').hidden = m !== 'html';
+    $('#box-link').hidden = m !== 'link';
+    $('#f-err').textContent = '';
+  }
+  function openAdd() {
+    if (!state.canWrite) { openSettings('게임을 올리려면 먼저 GitHub를 연결해 주세요.'); return; }
+    $('#add-form').reset();
+    setMode('html');
+    $('#add-sheet').hidden = false;
+    $('#f-title').focus();
+  }
+  function closeAdd() { $('#add-sheet').hidden = true; }
+
+  async function submitAdd(ev) {
+    ev.preventDefault();
+    var err = $('#f-err');
+    err.textContent = '';
+    var title = $('#f-title').value.trim();
+    if (!title) { err.textContent = '게임 이름을 입력해 주세요.'; return; }
+    var g = {
+      id: newId(),
+      title: title,
+      desc: $('#f-desc').value.trim(),
+      by: state.login,
+      byName: $('#f-by').value.trim(),
+      createdAt: Date.now()
+    };
+    var html = null;
+    if (state.mode === 'link') {
+      var u; try { u = new URL($('#f-url').value.trim()); } catch (e) { u = null; }
+      if (!u || (u.protocol !== 'https:' && u.protocol !== 'http:')) { err.textContent = 'https://로 시작하는 주소를 입력해 주세요.'; return; }
+      g.type = 'link'; g.url = u.href;
+    } else {
+      var file = $('#f-file').files[0];
+      if (file) {
+        try { html = await file.text(); } catch (e) { err.textContent = '파일을 읽지 못했어요. 다시 선택해 주세요.'; return; }
+      } else {
+        html = $('#f-code').value;
+      }
+      if (!html || !html.trim()) { err.textContent = 'HTML 파일을 고르거나 코드를 붙여넣어 주세요.'; return; }
+      var size = byteLen(html);
+      if (size > MAX_GAME_BYTES) { err.textContent = '파일이 ' + (size / 1e6).toFixed(1) + 'MB예요. 5MB 이하로 줄여 주세요.'; return; }
+      g.type = 'html'; g.size = size;
+    }
+
+    var btn = $('#add-submit');
+    btn.disabled = true; btn.textContent = '올리는 중...';
+    var gamePath = GAME_DIR + g.id + '.html';
+    var wroteFile = false;
+    try {
+      if (html != null) {
+        await putFile(gamePath, await textToB64(html), '게임 추가: ' + title);
+        wroteFile = true;
+      }
+      await changeList(function (list) { return list.concat([g]); }, '게임 목록에 추가: ' + title);
+      closeAdd();
+      render();
+      toast('올렸어요. 다른 사람 화면에는 1~2분 뒤에 보여요.');
+    } catch (e) {
+      if (wroteFile) { try { await deleteFile(gamePath, '올리기 실패로 되돌림: ' + title); } catch (x) {} }
+      err.textContent = friendlyError(e);
+    } finally {
+      btn.disabled = false; btn.textContent = '올리기';
+    }
+  }
+
+  async function removeGame(g) {
+    await changeList(function (list) { return list.filter(function (x) { return x.id !== g.id; }); }, '게임 삭제: ' + (g.title || g.id));
+    if (g.type !== 'link' && !g.html) {
+      try { await deleteFile(GAME_DIR + g.id + '.html', '게임 파일 삭제: ' + (g.title || g.id)); } catch (e) {}
+    }
+    render();
+    toast('삭제했어요. 다른 사람 화면에는 1~2분 뒤에 반영돼요.');
+  }
+
+  /* ---------- settings panel ---------- */
+  function openSettings(why) {
+    $('#set-why').textContent = why || '게임을 올리고 지우려면 이 사이트의 GitHub 저장소에 쓸 수 있는 토큰이 필요해요. 구경과 플레이는 연결 없이도 돼요.';
+    $('#s-repo').value = state.repo;
+    $('#s-token').value = '';
+    $('#s-token').placeholder = state.token ? '저장된 토큰이 있어요 (바꾸려면 새로 붙여넣기)' : 'github_pat_...';
+    $('#s-logout').hidden = !state.token;
+    $('#s-err').textContent = '';
+    $('#s-err').classList.remove('ok');
+    $('#set-sheet').hidden = false;
+    (state.repo ? $('#s-token') : $('#s-repo')).focus();
+  }
+  function closeSettings() { $('#set-sheet').hidden = true; }
+
+  async function saveSettings(ev) {
+    ev.preventDefault();
+    var err = $('#s-err');
+    err.classList.remove('ok');
+    var repo = $('#s-repo').value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+    var tok = $('#s-token').value.trim() || state.token;
+    if (!validRepo(repo)) { err.textContent = '저장소를 owner/repo 형태로 입력해 주세요. 예: myname/game-shelf'; return; }
+    if (!tok) { err.textContent = '토큰을 붙여넣어 주세요.'; return; }
+    var btn = $('#s-save');
+    btn.disabled = true; btn.textContent = '확인 중...';
+    var prev = { repo: state.repo, token: state.token };
+    state.repo = repo; state.token = tok;
+    try {
+      await connect();
+      if (!state.canWrite) throw apiErr(403);
+      lsSet(LS_REPO, repo); lsSet(LS_TOKEN, tok);
+      await loadGames();
+      render();
+      closeSettings();
+      toast('@' + state.login + ' 로 연결했어요.');
+    } catch (e) {
+      state.repo = prev.repo; state.token = prev.token;
+      try { await connect(); } catch (x) {}
+      render();
+      err.textContent = friendlyError(e);
+    } finally {
+      btn.disabled = false; btn.textContent = '연결';
+    }
+  }
+  function logout() {
+    lsSet(LS_TOKEN, '');
+    state.token = ''; state.login = ''; state.canWrite = false;
+    closeSettings();
+    render();
+    toast('이 브라우저에서 토큰을 지웠어요.');
+  }
+
+  /* ---------- wiring ---------- */
+  $('#open-add').addEventListener('click', openAdd);
+  $('#open-settings').addEventListener('click', function () { openSettings(''); });
+  $('#add-cancel').addEventListener('click', closeAdd);
+  $('#add-form').addEventListener('submit', submitAdd);
+  $('#set-form').addEventListener('submit', saveSettings);
+  $('#s-cancel').addEventListener('click', closeSettings);
+  $('#s-logout').addEventListener('click', logout);
+  $('#m-html').addEventListener('click', function () { setMode('html'); });
+  $('#m-link').addEventListener('click', function () { setMode('link'); });
+  $('#t-all').addEventListener('click', function () { state.view = 'all'; render(); });
+  $('#t-mine').addEventListener('click', function () { state.view = 'mine'; render(); });
+  $('#add-sheet').addEventListener('click', function (e) { if (e.target === this) closeAdd(); });
+  $('#set-sheet').addEventListener('click', function (e) { if (e.target === this) closeSettings(); });
+  $('#p-close').addEventListener('click', closeGame);
+  $('#p-full').addEventListener('click', function () {
+    var f = $('#p-frame');
+    try {
+      var p = f.requestFullscreen && f.requestFullscreen();
+      if (p && p.catch) p.catch(function () { toast('이 화면에서는 전체 화면을 쓸 수 없어요.'); });
+    } catch (e) { toast('이 화면에서는 전체 화면을 쓸 수 없어요.'); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('#player').hidden) closeGame();
+    else if (!$('#add-sheet').hidden) closeAdd();
+    else if (!$('#set-sheet').hidden) closeSettings();
+  });
+
+  /* ---------- start ---------- */
+  state.repo = lsGet(LS_REPO) || DEFAULT_REPO || detectRepo();
+  state.token = lsGet(LS_TOKEN);
+  render();
+  (async function start() {
+    try { await connect(); }
+    catch (e) { toast(friendlyError(e)); }
+    await loadGames();
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
